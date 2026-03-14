@@ -1,9 +1,26 @@
 #!/usr/bin/env python3
 import urllib.request
 import json
-import sys
+import os
+from pathlib import Path
 
-URL = "http://100.91.114.23:17580/sgv.json?count=1"
+# Détection du dossier du script pour trouver le .env
+BASE_DIR = Path(__file__).resolve().parent
+ENV_FILE = BASE_DIR / ".env"
+
+def load_env():
+    """Charge le .env manuellement pour rester léger."""
+    if ENV_FILE.exists():
+        with open(ENV_FILE) as f:
+            for line in f:
+                if "=" in line:
+                    key, value = line.strip().split("=", 1)
+                    os.environ[key] = value.strip('"').strip("'")
+
+# Chargement initial
+load_env()
+SERVER_URL = os.getenv("BLOOD_GLUCOSE_SERVER", "http://100.x.y.z:17580")
+URL = f"{SERVER_URL}/sgv.json?count=1"
 
 def get_bg():
     try:

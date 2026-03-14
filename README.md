@@ -1,57 +1,54 @@
-# Blood Glucose Monitor - Plasma 6 & Zsh Integration
+# Plasma 6 Blood Glucose Monitor
 
-Un moniteur de glycémie en temps réel conçu pour **KDE Plasma 6** et **Zsh (Oh My Posh)**, optimisé pour fonctionner avec **Nightscout** ou **Juggluco** via un réseau **Tailscale**.
+A real-time blood glucose monitor for **KDE Plasma 6** and **Zsh (Oh My Posh)**. Optimized for **Nightscout** or **Juggluco** via **Tailscale**.
 
-## 🚀 Fonctionnalités
+## 🚀 Features
 
-- **Applet Plasma 6** :
-    - Affichage direct de la glycémie et de la tendance dans votre tableau de bord.
-    - Vue détaillée au clic avec **graphique historique** (dernières 2h).
-    - **Alertes sonores et notifications** système en cas de glycémie critique (≤ 75 ou ≥ 250 mg/dL).
-    - Vérification automatique de la connexion Tailscale avant chaque requête.
-    - Code couleur dynamique (Vert/Orange/Rouge) selon les seuils.
+- **KDE Plasma 6 Applet**:
+    - Real-time BG and trend arrow in your panel.
+    - Expanded view with a **historical chart** (last 2 hours).
+    - **Audio & Visual Notifications** for critical levels (Low ≤ 75, High ≥ 250 mg/dL).
+    - Automatic **Tailscale connectivity check** before fetching data.
 
-- **Intégration Terminal (Oh My Posh)** :
-    - Glycémie affichée directement dans votre prompt Zsh avec l'icône 🩸.
-    - Couleurs adaptées au thème **Gruvbox Dark** (Orange/Marron).
-    - Système de cache pour ne pas ralentir le terminal.
+- **Terminal Integration (Oh My Posh)**:
+    - Lightweight Python script to show your BG in your prompt.
+    - Customizable colors and icons in your shell theme.
+    - Efficient 10s cache to avoid network lag.
 
 ## 🛠️ Installation
 
-### 1. Prérequis
-- **Tailscale** installé et connecté.
+### 1. Prerequisites
+- **Tailscale** installed and connected.
 - **KDE Plasma 6**.
-- **Oh My Posh** (pour l'intégration terminal).
-- **Python 3** (pour le script de prompt).
+- **Python 3**.
 
-### 2. Configuration de l'Applet Plasma
+### 2. Configuration (Environment Variables)
+Create a `.env` file in the root directory:
 ```bash
-# Cloner le dépôt et installer l'applet
+BLOOD_GLUCOSE_SERVER="http://100.x.y.z:17580"
+```
+
+### 3. Plasma Applet Setup
+```bash
 kpackagetool6 -t Plasma/Applet --install .
 ```
-Ensuite, ajoutez le composant graphique "Blood Glucose Monitor" à votre tableau de bord. Dans les paramètres, renseignez l'URL de votre serveur (ex: `http://100.x.y.z:17580`).
+Add the "Blood Glucose Monitor" widget to your panel. Configure the server URL and thresholds in the settings UI.
 
-### 3. Configuration du Prompt Zsh
-Ajoutez ce segment à votre fichier de configuration Oh My Posh (`.omp.json`) :
+### 4. Zsh / Oh My Posh Setup
+Add a `command` segment to your Oh My Posh configuration file:
 ```json
 {
   "type": "command",
   "style": "diamond",
-  "background": "p:bg1",
-  "foreground": "p:orange",
+  "background": "transparent",
+  "foreground": "#ffffff",
   "properties": {
-    "command": "/chemin/vers/applet/bg_prompt.py",
+    "command": "/path/to/bg_prompt.py",
     "cache_duration": "10s"
   },
   "template": " 🩸 {{ .Output }} "
 }
 ```
 
-## ⚙️ Architecture
-- `contents/ui/main.qml` : Logique principale de l'applet Plasma 6.
-- `contents/ui/FullRepresentation.qml` : Interface du graphique détaillé.
-- `contents/code/logic.js` : Gestion des appels API vers Nightscout/Juggluco.
-- `bg_prompt.py` : Script Python ultra-léger pour l'intégration terminal.
-
-## 📝 Auteur
-Développé par **rogissart**.
+## 📝 Author
+Developed by **rogissart**.

@@ -15,7 +15,7 @@ SimpleKCM {
         Controls.TextField {
             id: serverUrlField
             Kirigami.FormData.label: "Server URL (e.g. Tailscale IP):"
-            placeholderText: "http://100.91.114.23:17580"
+            placeholderText: "http://100.x.y.z:17580"
         }
         Controls.ComboBox {
             id: unitCombo

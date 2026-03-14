@@ -6,7 +6,7 @@
   <kcfgfile name=""/>
   <group name="General">
     <entry name="serverUrl" type="String">
-      <default>http://100.91.114.23:17580</default>
+      <default>http://100.x.y.z:17580</default>
     </entry>
     <entry name="unit" type="String">
       <default>mg/dL</default>

@@ -13,3 +13,4 @@ __pycache__/
 # Plasma/KDE files (si générés)
 build/
 *.pyc
+.env
