@@ -1,0 +1,20 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "developer@example.com",
+                "Name": "Developer"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Monitor blood glucose from Nightscout/Juggluco over Tailscale",
+        "Icon": "medical-cross",
+        "Id": "org.kde.plasma.bloodglucose",
+        "Name": "Blood Glucose Monitor",
+        "Version": "1.1",
+        "Website": "https://example.com"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-MainScript": "ui/main.qml"
+}

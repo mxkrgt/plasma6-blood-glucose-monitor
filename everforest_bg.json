@@ -1,0 +1,84 @@
+{
+  "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
+  "palette": {
+    "bg_green": "#A7C080",
+    "fg_green": "#425047",
+    "red": "#e67e80",
+    "orange": "#e69875",
+    "blue": "#7fbbb3"
+  },
+  "blocks": [
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "segments": [
+        {
+          "foreground": "#425047",
+          "background": "p:bg_green",
+          "leading_diamond": "",
+          "template": "👤 {{ .UserName }} ",
+          "style": "diamond",
+          "type": "session"
+        },
+        {
+          "background": "p:blue",
+          "foreground": "p:fg_green",
+          "template": " 📂 {{ .Path }} ",
+          "properties": {
+            "style": "folder"
+          },
+          "style": "diamond",
+          "type": "path"
+        },
+        {
+          "properties": {
+            "fetch_status": true
+          },
+          "template": "  {{ .HEAD }} ",
+          "background": "p:bg_green",
+          "foreground": "p:fg_green",
+          "type": "git",
+          "style": "diamond"
+        },
+        {
+          "type": "command",
+          "style": "diamond",
+          "background": "p:fg_green",
+          "foreground": "p:bg_green",
+          "properties": {
+            "command": "/home/rogissart/Documents/Code/applet/bg_prompt.py",
+            "cache_duration": "5s"
+          },
+          "template": " 🩸 {{ .Output }} ",
+          "foreground_templates": [
+            "{{ if or (le (index (split .Output \"\") 0 | strtol) 75) (ge (index (split .Output \"\") 0 | strtol) 250) }}p:red{{ end }}",
+            "{{ if or (le (index (split .Output \"\") 0 | strtol) 90) (ge (index (split .Output \"\") 0 | strtol) 180) }}p:orange{{ end }}"
+          ]
+        },
+        {
+          "type": "time",
+          "style": "diamond",
+          "background": "p:bg_green",
+          "foreground": "p:fg_green",
+          "trailing_diamond": "",
+          "template": " 🕒 {{.CurrentDate | date \"15:04\"}} "
+        }
+      ]
+    },
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "segments": [
+        {
+          "template": "\n ",
+          "foreground": "p:bg_green",
+          "type": "text",
+          "style": "plain"
+        }
+      ],
+      "newline": false
+    }
+  ],
+  "version": 3,
+  "final_space": true
+}
