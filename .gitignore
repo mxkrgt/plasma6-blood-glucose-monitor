@@ -1,0 +1,15 @@
+# Thèmes personnels
+gruvbox_bg.json
+everforest_bg.json
+everforest_omp.json
+
+# Cache et fichiers temporaires
+.DS_Store
+*.log
+__pycache__/
+.vscode/
+.idea/
+
+# Plasma/KDE files (si générés)
+build/
+*.pyc
