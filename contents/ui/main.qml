@@ -1,8 +1,8 @@
 import QtQuick
-import QtMultimedia
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents
+import org.kde.plasma.plasma5support as Plasma5Support
 import "../code/logic.js" as Logic
 
 PlasmoidItem {
@@ -18,8 +18,8 @@ PlasmoidItem {
     property bool tailscaleConnected: true
     property string lastError: ""
     property var historyData: []
+    property string debugLogText: ""
     
-    // Pour éviter les alertes répétitives sur la même mesure
     property double lastAlertTimestamp: 0
 
     property string serverUrl: plasmoid.configuration.serverUrl
@@ -27,6 +27,13 @@ PlasmoidItem {
     property int lowThreshold: plasmoid.configuration.lowThreshold
     property int highThreshold: plasmoid.configuration.highThreshold
     property int refreshInterval: plasmoid.configuration.refreshInterval
+    property bool soundEnabled: plasmoid.configuration.soundEnabled
+    property int soundVolume: plasmoid.configuration.soundVolume
+    property int soundInterval: plasmoid.configuration.soundInterval
+    property int snoozeDuration: plasmoid.configuration.snoozeDuration
+
+    property double snoozeUntil: 0
+    property double lastSoundTime: 0
 
     toolTipMainText: "Blood Glucose Monitor"
     toolTipSubText: lastError || (isError ? "Erreur de connexion" : "Connecté à " + serverUrl)
@@ -43,11 +50,18 @@ PlasmoidItem {
     
     fullRepresentation: FullRepresentation {}
 
-    // Effet sonore pour les alertes
-    SoundEffect {
-        id: alertSound
-        source: "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"
-        volume: 1.0
+    Plasma5Support.DataSource {
+        id: soundRunner
+        engine: "executable"
+        connectedSources: []
+        onNewData: (sourceName, data) => {
+            disconnectSource(sourceName);
+        }
+        function playAlert() {
+            var rawVolume = Math.floor((root.soundVolume / 100.0) * 65536);
+            root.logDebug("Exécution de paplay (vol: " + root.soundVolume + "% -> " + rawVolume + ")...");
+            connectSource("paplay --volume=" + rawVolume + " /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga");
+        }
     }
 
     Timer {
@@ -59,76 +73,173 @@ PlasmoidItem {
         onTriggered: updateData()
     }
 
+    function logDebug(msg) {
+        var time = new Date().toLocaleTimeString();
+        var fullMsg = "[" + time + "] " + msg;
+        console.log("BloodGlucose: " + fullMsg);
+        
+        var lines = debugLogText.split("\n");
+        if (lines.length > 30) {
+            lines = lines.slice(0, 30);
+        }
+        debugLogText = fullMsg + "\n" + lines.join("\n");
+    }
+
     function updateData() {
-        checkTailscaleStatus(function(connected) {
-            tailscaleConnected = connected;
-            if (!connected) {
+        logDebug("--- Démarrage mise à jour ---");
+        
+        checkTailscaleLocal(function(pcConnected) {
+            tailscaleConnected = pcConnected;
+            if (!pcConnected) {
                 isError = true;
                 sgvText = "TS Off";
+                lastError = "Tailscale est coupé sur ce PC";
+                logDebug("ERREUR: Tailscale PC Off");
                 return;
             }
 
-            Logic.fetchGlucoseData(serverUrl, 36, function(data) {
-                isError = false;
-                var latest = data[0];
-                sgvValue = latest.sgv;
-                sgvText = Logic.convertSgv(sgvValue, unit);
-                trendArrow = Logic.getTrendArrow(latest.direction);
-                
-                // --- Logique d'alerte ---
-                var currentTimestamp = latest.date;
-                if (currentTimestamp > lastAlertTimestamp) {
-                    checkAlerts(latest);
-                    lastAlertTimestamp = currentTimestamp;
+            logDebug("Test connexion vers le téléphone...");
+            checkPhoneReachable(function(phoneConnected) {
+                if (!phoneConnected) {
+                    isError = true;
+                    sgvText = "Phone Off";
+                    lastError = "Téléphone injoignable (Vérifiez Tailscale sur le tel)";
+                    logDebug("ERREUR: Téléphone ne répond pas à " + serverUrl);
+                    return;
                 }
-                // -----------------------
 
-                if (data.length > 1) {
-                    var delta = sgvValue - data[1].sgv;
-                    deltaText = (delta > 0 ? "+" : "") + Logic.convertSgv(delta, unit);
-                }
-                
-                var diffMins = Math.floor((new Date().getTime() - latest.date) / 60000);
-                isStale = (diffMins > 15);
-                dataAge = diffMins + " min";
-                historyData = data.reverse(); 
-            }, function(errorMsg) {
-                isError = true;
-                sgvText = "Err";
+                logDebug("Téléphone joignable. Lancement de la requête data...");
+                fetchData();
             });
         });
+    }
+
+    function fetchData() {
+        var url = serverUrl;
+        if (!url.endsWith("/")) url += "/";
+        url += "sgv.json?count=36";
+
+        lastError = "Récupération...";
+        logDebug("GET " + url);
+
+        var xhr = new XMLHttpRequest();
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+                logDebug("API HTTP Status: " + xhr.status);
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        logDebug("Données reçues: " + data.length + " entrées");
+                        processData(data);
+                    } catch (e) {
+                        handleError("Erreur JSON: " + e.message);
+                    }
+                } else {
+                    handleError("Erreur HTTP " + xhr.status);
+                }
+            }
+        };
+        xhr.open("GET", url, true);
+        xhr.timeout = 8000;
+        xhr.ontimeout = function() { handleError("Timeout lors de la récupération des données"); };
+        xhr.onerror = function() { handleError("Erreur réseau lors de la récupération"); };
+        xhr.send();
+    }
+
+    function processData(data) {
+        if (!data || data.length === 0) {
+            handleError("Aucune donnée retournée par le JSON");
+            return;
+        }
+        isError = false;
+        lastError = "";
+        
+        var latest = data[0];
+        sgvValue = latest.sgv;
+        sgvText = Logic.convertSgv(sgvValue, unit);
+        trendArrow = Logic.getTrendArrow(latest.direction);
+        
+        logDebug("Valeur lue: " + sgvValue + " " + trendArrow);
+
+        checkAlerts(latest);
+
+        if (data.length > 1) {
+            var delta = sgvValue - data[1].sgv;
+            deltaText = (delta > 0 ? "+" : "") + Logic.convertSgv(delta, unit);
+        }
+        
+        var diffMins = Math.floor((new Date().getTime() - latest.date) / 60000);
+        isStale = (diffMins > 15);
+        dataAge = diffMins + " min";
+        historyData = data.reverse();
+        logDebug("Mise à jour UI terminée");
+    }
+
+    function handleError(msg) {
+        logDebug("CRASH: " + msg);
+        isError = true;
+        sgvText = "Err";
+        lastError = msg;
     }
 
     function checkAlerts(entry) {
         var val = entry.sgv;
         var message = "";
-        var type = "";
-
-        if (val <= 75) {
-            message = "ALERTE BASSE : " + sgvText + " " + unit;
-            type = "critical";
-        } else if (val >= 250) {
-            message = "ALERTE HAUTE : " + sgvText + " " + unit;
-            type = "warning";
-        }
+        
+        if (val <= lowThreshold) message = "ALERTE BASSE : " + sgvText + " " + unit;
+        else if (val >= highThreshold) message = "ALERTE HAUTE : " + sgvText + " " + unit;
 
         if (message !== "") {
-            alertSound.play();
-            // Utilisation de l'API de notification Plasma
-            plasmoid.notification({
-                title: "Blood Glucose Monitor",
-                message: message,
-                icon: "medical-cross"
-            });
+            var now = new Date().getTime();
+            
+            if (!soundEnabled) {
+                logDebug("Alerte bloquée : Son désactivé.");
+                return;
+            }
+            if (now < snoozeUntil) {
+                var remainingMins = Math.ceil((snoozeUntil - now) / 60000);
+                logDebug("Alerte bloquée : Snooze actif (" + remainingMins + " min restants).");
+                return;
+            }
+            if ((now - lastSoundTime) < (soundInterval * 60000)) {
+                logDebug("Alerte bloquée : Intervalle non écoulé.");
+                return;
+            }
+
+            logDebug("Déclenchement alerte via paplay: " + message);
+            soundRunner.playAlert();
+            lastSoundTime = now;
         }
     }
 
-    function checkTailscaleStatus(callback) {
+    function snoozeAlert() {
+        snoozeUntil = new Date().getTime() + (snoozeDuration * 60000);
+        logDebug("Snooze activé pour " + snoozeDuration + " minutes.");
+    }
+
+    function checkTailscaleLocal(callback) {
         var xhr = new XMLHttpRequest();
         xhr.open("GET", "http://100.100.100.100/", true);
+        xhr.timeout = 1500;
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) callback(xhr.status !== 0);
+        };
+        xhr.onerror = function() { callback(false); };
+        xhr.ontimeout = function() { callback(false); };
+        xhr.send();
+    }
+
+    function checkPhoneReachable(callback) {
+        var xhr = new XMLHttpRequest();
+        var testUrl = serverUrl;
+        if (!testUrl.endsWith("/")) testUrl += "/";
+        
+        xhr.open("GET", testUrl, true);
         xhr.timeout = 2000;
         xhr.onreadystatechange = function() {
-            if (xhr.readyState === XMLHttpRequest.DONE) callback(xhr.status !== 0);
+            if (xhr.readyState === 4) {
+                callback(xhr.status !== 0);
+            }
         };
         xhr.onerror = function() { callback(false); };
         xhr.ontimeout = function() { callback(false); };
@@ -136,7 +247,7 @@ PlasmoidItem {
     }
 
     function getColor() {
-        if (!tailscaleConnected) return "#ff0000"; 
+        if (sgvText === "TS Off" || sgvText === "Phone Off") return "#ff0000"; 
         if (isError) return Kirigami.Theme.textColor;
         if (sgvValue <= 0) return Kirigami.Theme.textColor; 
         if (sgvValue <= 75 || sgvValue >= 250) return "#ff0000"; 

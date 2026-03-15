@@ -4,7 +4,6 @@ function fetchGlucoseData(url, count, callback, errorCallback) {
         return;
     }
     
-    // Construct the URL to get the requested number of entries
     var apiUrl = url;
     if (!apiUrl.endsWith("/")) {
         apiUrl += "/";
@@ -12,12 +11,8 @@ function fetchGlucoseData(url, count, callback, errorCallback) {
     apiUrl += "sgv.json?count=" + count;
 
     var xhr = new XMLHttpRequest();
-    xhr.open("GET", apiUrl, true);
-    // Timeout set to 10 seconds
-    xhr.timeout = 10000;
-    
     xhr.onreadystatechange = function() {
-        if (xhr.readyState === XMLHttpRequest.DONE) {
+        if (xhr.readyState === 4) {
             if (xhr.status === 200) {
                 try {
                     var data = JSON.parse(xhr.responseText);
@@ -27,18 +22,16 @@ function fetchGlucoseData(url, count, callback, errorCallback) {
                         errorCallback("No data returned");
                     }
                 } catch (e) {
-                    errorCallback("Invalid JSON: " + e.message);
+                    errorCallback("Invalid JSON");
                 }
             } else {
-                errorCallback("HTTP Error: " + xhr.status);
+                errorCallback("HTTP " + xhr.status);
             }
         }
     };
     
-    xhr.ontimeout = function() {
-        errorCallback("Timeout connecting to server");
-    };
-    
+    xhr.open("GET", apiUrl, true);
+    xhr.timeout = 10000;
     xhr.send();
 }
 

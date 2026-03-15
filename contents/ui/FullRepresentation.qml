@@ -1,14 +1,17 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls as Controls
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents
 
 Item {
     id: fullRoot
-    Layout.minimumWidth: Kirigami.Units.gridUnit * 18
-    Layout.minimumHeight: Kirigami.Units.gridUnit * 14
+    Layout.minimumWidth: Kirigami.Units.gridUnit * 20
+    Layout.minimumHeight: Kirigami.Units.gridUnit * 18
     Layout.preferredWidth: Kirigami.Units.gridUnit * 24
-    Layout.preferredHeight: Kirigami.Units.gridUnit * 18
+    Layout.preferredHeight: Kirigami.Units.gridUnit * 22
+
+    property bool debugVisible: false
 
     ColumnLayout {
         anchors.fill: parent
@@ -17,26 +20,60 @@ Item {
 
         // Header
         RowLayout {
-            Layout.alignment: Qt.AlignHCenter
+            Layout.fillWidth: true
             
-            PlasmaComponents.Label {
-                text: root.sgvText
-                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 3
-                font.weight: Font.Bold
-                color: root.getColor()
+            PlasmaComponents.Button {
+                icon.name: "system-run"
+                flat: true
+                onClicked: fullRoot.debugVisible = !fullRoot.debugVisible
+                PlasmaComponents.ToolTip { text: "Afficher/Masquer les logs de Debug" }
             }
-            
-            PlasmaComponents.Label {
-                text: root.unit
-                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.5
-                color: root.getColor()
-                Layout.alignment: Qt.AlignBottom
+
+            Item { Layout.fillWidth: true } 
+
+            RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+                
+                PlasmaComponents.Label {
+                    text: root.sgvText
+                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 3
+                    font.weight: Font.Bold
+                    color: root.getColor()
+                }
+                
+                PlasmaComponents.Label {
+                    text: root.unit
+                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 1.5
+                    color: root.getColor()
+                    Layout.alignment: Qt.AlignBottom
+                }
+                
+                PlasmaComponents.Label {
+                    text: root.trendArrow
+                    font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 3
+                    color: root.getColor()
+                }
             }
-            
-            PlasmaComponents.Label {
-                text: root.trendArrow
-                font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 3
-                color: root.getColor()
+
+            Item { Layout.fillWidth: true } 
+
+            RowLayout {
+                spacing: Kirigami.Units.smallSpacing
+
+                PlasmaComponents.Button {
+                    icon.name: "notifications-disabled"
+                    flat: true
+                    visible: (root.sgvValue <= root.lowThreshold || root.sgvValue >= root.highThreshold) && root.soundEnabled
+                    onClicked: root.snoozeAlert()
+                    PlasmaComponents.ToolTip { text: "Snooze l'alarme (" + root.snoozeDuration + " min)" }
+                }
+
+                PlasmaComponents.Button {
+                    icon.name: "view-refresh"
+                    flat: true
+                    onClicked: root.updateData()
+                    PlasmaComponents.ToolTip { text: "Rafraîchir maintenant" }
+                }
             }
         }
         
@@ -44,14 +81,15 @@ Item {
             text: root.deltaText ? "Delta: " + root.deltaText : ""
             Layout.alignment: Qt.AlignHCenter
             color: Kirigami.Theme.textColor
-            visible: root.deltaText !== ""
+            visible: root.deltaText !== "" && !fullRoot.debugVisible
         }
 
-        // Graphique avec Axes
+        // Vue Graphique (Masquée si Debug ouvert)
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.topMargin: Kirigami.Units.gridUnit
+            visible: !fullRoot.debugVisible
             
             readonly property int leftMargin: Kirigami.Units.gridUnit * 2.5
             readonly property int bottomMargin: Kirigami.Units.gridUnit * 1.5
@@ -62,7 +100,6 @@ Item {
                 onPaint: {
                     var ctx = getContext("2d");
                     ctx.clearRect(0, 0, width, height);
-                    
                     if (!root.historyData || root.historyData.length < 2) return;
                     
                     var data = root.historyData;
@@ -78,13 +115,11 @@ Item {
                     }
                     var range = maxVal - minVal;
                     
-                    // 1. Grille et Axes
                     ctx.strokeStyle = Kirigami.Theme.textColor;
                     ctx.fillStyle = Kirigami.Theme.textColor;
                     ctx.lineWidth = 1;
                     ctx.font = (Kirigami.Theme.defaultFont.pixelSize * 0.75) + "px sans-serif";
                     
-                    // Axe Y - Valeurs
                     var steps = 4;
                     for (var s = 0; s <= steps; s++) {
                         var val = Math.round(minVal + (range * s / steps));
@@ -95,7 +130,6 @@ Item {
                         ctx.fillText(val, 0, y + 4);
                     }
 
-                    // Axe X - Repères temporels (15m, 30m, 1h, 1h30)
                     ctx.globalAlpha = 0.2;
                     ctx.beginPath(); ctx.moveTo(startX, drawH); ctx.lineTo(width, drawH); ctx.stroke();
                     
@@ -107,14 +141,9 @@ Item {
                         var msAgo = minutesAgo * 60000;
                         var ratio = (totalTimeMs - msAgo) / totalTimeMs;
                         if (ratio < 0) return;
-                        
                         var x = startX + (ratio * drawW);
-                        
-                        // Petite ligne verticale
                         ctx.globalAlpha = 0.1;
                         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, drawH); ctx.stroke();
-                        
-                        // Label
                         ctx.globalAlpha = 0.7;
                         ctx.textAlign = "center";
                         ctx.fillText(label, x, height - 2);
@@ -127,7 +156,6 @@ Item {
                     drawTimeMarker(90, "1h30");
                     ctx.textAlign = "left";
 
-                    // 2. Seuils
                     ctx.setLineDash([5, 5]);
                     var yHigh = drawH - ((root.highThreshold - minVal) / range * drawH);
                     var yLow = drawH - ((root.lowThreshold - minVal) / range * drawH);
@@ -137,7 +165,6 @@ Item {
                     ctx.setLineDash([]);
                     ctx.globalAlpha = 1.0;
 
-                    // 3. Courbe
                     var xStep = drawW / (data.length - 1);
                     ctx.beginPath();
                     ctx.strokeStyle = Kirigami.Theme.highlightColor;
@@ -151,7 +178,6 @@ Item {
                     }
                     ctx.stroke();
 
-                    // Gradient
                     var grad = ctx.createLinearGradient(0, 0, 0, drawH);
                     grad.addColorStop(0, Kirigami.Theme.highlightColor);
                     grad.addColorStop(1, "transparent");
@@ -162,13 +188,7 @@ Item {
                     ctx.fill();
                 }
             }
-            
-            Connections {
-                target: root
-                function onHistoryDataChanged() {
-                    chartCanvas.requestPaint();
-                }
-            }
+            Connections { target: root; function onHistoryDataChanged() { chartCanvas.requestPaint(); } }
         }
         
         PlasmaComponents.Label {
@@ -176,6 +196,53 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 0.8
             color: Kirigami.Theme.disabledTextColor
+            visible: !fullRoot.debugVisible
+        }
+
+        // Vue de Debug
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: fullRoot.debugVisible
+
+            PlasmaComponents.Label {
+                text: "Console de Diagnostic"
+                font.weight: Font.Bold
+                color: Kirigami.Theme.highlightColor
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: Kirigami.Theme.backgroundColor
+                border.color: Kirigami.Theme.focusColor
+                radius: 4
+
+                Controls.ScrollView {
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.smallSpacing
+                    contentWidth: availableWidth
+                    
+                    Text {
+                        width: parent.width
+                        text: root.debugLogText
+                        font.family: "monospace"
+                        font.pixelSize: Kirigami.Theme.defaultFont.pixelSize * 0.85
+                        color: Kirigami.Theme.textColor
+                        wrapMode: Text.WrapAnywhere
+                    }
+                }
+            }
+            
+            RowLayout {
+                Layout.fillWidth: true
+                PlasmaComponents.Button {
+                    text: "Forcer le test réseau"
+                    icon.name: "network-connect"
+                    onClicked: root.updateData()
+                    Layout.fillWidth: true
+                }
+            }
         }
     }
 }
