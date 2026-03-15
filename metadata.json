@@ -12,7 +12,7 @@
         "Icon": "medical-cross",
         "Id": "org.kde.plasma.bloodglucose",
         "Name": "Blood Glucose Monitor",
-        "Version": "1.2",
+        "Version": "1.4",
         "Website": "https://example.com"
     },
     "X-Plasma-API-Minimum-Version": "6.0",
