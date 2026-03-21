@@ -1,36 +1,36 @@
 #!/usr/bin/env python3
 import urllib.request
+import urllib.error
 import json
 import os
-from pathlib import Path
+import hashlib
 
-# Détection du dossier du script pour trouver le .env
-BASE_DIR = Path(__file__).resolve().parent
-ENV_FILE = BASE_DIR / ".env"
+NIGHTSCOUT_URL = os.getenv("NIGHTSCOUT_URL", "https://diabetemaxime.duckdns.org")
+NIGHTSCOUT_API_SECRET = os.getenv("NIGHTSCOUT_API_SECRET", "")
 
-def load_env():
-    """Charge le .env manuellement pour rester léger."""
-    if ENV_FILE.exists():
-        with open(ENV_FILE) as f:
-            for line in f:
-                if "=" in line:
-                    key, value = line.strip().split("=", 1)
-                    os.environ[key] = value.strip('"').strip("'")
-
-# Chargement initial
-load_env()
-SERVER_URL = os.getenv("BLOOD_GLUCOSE_SERVER", "http://100.x.y.z:17580")
-URL = f"{SERVER_URL}/sgv.json?count=1"
+def get_api_secret_hash():
+    return hashlib.sha1(NIGHTSCOUT_API_SECRET.encode()).hexdigest()
 
 def get_bg():
     try:
-        with urllib.request.urlopen(URL, timeout=1.0) as response:
+        url = NIGHTSCOUT_URL.rstrip("/") + "/api/v1/entries/sgv.json?count=1"
+        req = urllib.request.Request(url)
+        req.add_header("API-SECRET", get_api_secret_hash())
+        with urllib.request.urlopen(req, timeout=2.0) as response:
             data = json.loads(response.read().decode())
-            if not data: return "0"
+            if not data:
+                return "0"
             latest = data[0]
             sgv = latest.get("sgv", 0)
-            return str(sgv)
-    except:
+            direction = latest.get("direction", "")
+            arrows = {
+                "DoubleUp": "⇈", "SingleUp": "↑", "FortyFiveUp": "↗",
+                "Flat": "→", "FortyFiveDown": "↘", "SingleDown": "↓",
+                "DoubleDown": "⇊",
+            }
+            arrow = arrows.get(direction, "")
+            return f"{sgv}{arrow}"
+    except Exception:
         return "0"
 
 if __name__ == "__main__":

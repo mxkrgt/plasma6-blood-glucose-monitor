@@ -15,7 +15,6 @@ PlasmoidItem {
     property string dataAge: ""
     property bool isStale: false
     property bool isError: false
-    property bool tailscaleConnected: true
     property string lastError: ""
     property var historyData: []
     property string debugLogText: ""
@@ -23,6 +22,7 @@ PlasmoidItem {
     property double lastAlertTimestamp: 0
 
     property string serverUrl: plasmoid.configuration.serverUrl
+    property string apiSecretHash: plasmoid.configuration.apiSecretHash
     property string unit: plasmoid.configuration.unit
     property int lowThreshold: plasmoid.configuration.lowThreshold
     property int highThreshold: plasmoid.configuration.highThreshold
@@ -36,7 +36,7 @@ PlasmoidItem {
     property double lastSoundTime: 0
 
     toolTipMainText: "Blood Glucose Monitor"
-    toolTipSubText: lastError || (isError ? "Erreur de connexion" : "Connecté à " + serverUrl)
+    toolTipSubText: lastError || (isError ? "Erreur de connexion" : "Nightscout: " + serverUrl)
 
     Plasmoid.backgroundHints: Plasmoid.DefaultBackground
     preferredRepresentation: compactRepresentation
@@ -87,37 +87,13 @@ PlasmoidItem {
 
     function updateData() {
         logDebug("--- Démarrage mise à jour ---");
-        
-        checkTailscaleLocal(function(pcConnected) {
-            tailscaleConnected = pcConnected;
-            if (!pcConnected) {
-                isError = true;
-                sgvText = "TS Off";
-                lastError = "Tailscale est coupé sur ce PC";
-                logDebug("ERREUR: Tailscale PC Off");
-                return;
-            }
-
-            logDebug("Test connexion vers le téléphone...");
-            checkPhoneReachable(function(phoneConnected) {
-                if (!phoneConnected) {
-                    isError = true;
-                    sgvText = "Phone Off";
-                    lastError = "Téléphone injoignable (Vérifiez Tailscale sur le tel)";
-                    logDebug("ERREUR: Téléphone ne répond pas à " + serverUrl);
-                    return;
-                }
-
-                logDebug("Téléphone joignable. Lancement de la requête data...");
-                fetchData();
-            });
-        });
+        fetchData();
     }
 
     function fetchData() {
         var url = serverUrl;
         if (!url.endsWith("/")) url += "/";
-        url += "sgv.json?count=36";
+        url += "api/v1/entries/sgv.json?count=36";
 
         lastError = "Récupération...";
         logDebug("GET " + url);
@@ -141,6 +117,7 @@ PlasmoidItem {
         };
         xhr.open("GET", url, true);
         xhr.timeout = 8000;
+        xhr.setRequestHeader("API-SECRET", apiSecretHash);
         xhr.ontimeout = function() { handleError("Timeout lors de la récupération des données"); };
         xhr.onerror = function() { handleError("Erreur réseau lors de la récupération"); };
         xhr.send();
@@ -217,41 +194,11 @@ PlasmoidItem {
         logDebug("Snooze activé pour " + snoozeDuration + " minutes.");
     }
 
-    function checkTailscaleLocal(callback) {
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", "http://100.100.100.100/", true);
-        xhr.timeout = 1500;
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) callback(xhr.status !== 0);
-        };
-        xhr.onerror = function() { callback(false); };
-        xhr.ontimeout = function() { callback(false); };
-        xhr.send();
-    }
-
-    function checkPhoneReachable(callback) {
-        var xhr = new XMLHttpRequest();
-        var testUrl = serverUrl;
-        if (!testUrl.endsWith("/")) testUrl += "/";
-        
-        xhr.open("GET", testUrl, true);
-        xhr.timeout = 2000;
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === 4) {
-                callback(xhr.status !== 0);
-            }
-        };
-        xhr.onerror = function() { callback(false); };
-        xhr.ontimeout = function() { callback(false); };
-        xhr.send();
-    }
-
     function getColor() {
-        if (sgvText === "TS Off" || sgvText === "Phone Off") return "#ff0000"; 
         if (isError) return Kirigami.Theme.textColor;
-        if (sgvValue <= 0) return Kirigami.Theme.textColor; 
-        if (sgvValue <= 75 || sgvValue >= 250) return "#ff0000"; 
-        if (sgvValue > highThreshold || sgvValue <= lowThreshold + 10) return "#ffa500"; 
-        return Kirigami.Theme.positiveTextColor; 
+        if (sgvValue <= 0) return Kirigami.Theme.textColor;
+        if (sgvValue <= 75 || sgvValue >= 250) return "#ff0000";
+        if (sgvValue > highThreshold || sgvValue <= lowThreshold + 10) return "#ffa500";
+        return Kirigami.Theme.positiveTextColor;
     }
 }
